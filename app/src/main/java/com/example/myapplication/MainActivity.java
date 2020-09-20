@@ -10,6 +10,12 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Toast;
 
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
 import com.google.android.exoplayer2.ExoPlayerFactory;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.source.ExtractorMediaSource;
@@ -19,6 +25,7 @@ import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 import com.google.android.exoplayer2.util.Util;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -36,13 +43,43 @@ public class MainActivity extends AppCompatActivity {
     private String videoLink = null ;
     private JSONObject jsonObject ;
     private String apiUrl = "http://15.207.150.183/API/index.php?p=videoTestAPI";
+    private RequestQueue requestQueue;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        requestQueue = Volley.newRequestQueue(this);
 
         iniExoplayer();
+    }
+    private void jsonParse() {
+        String url = apiUrl;
+        JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null, new Response.Listener<JSONObject>() {
+            @Override
+            public void onResponse(JSONObject response) {
+                try {
+                    JSONArray jsonArray = response.getJSONArray("msg");
+                    for (int i = 0; i < jsonArray.length(); i++) {
+                        JSONObject video = jsonArray.getJSONObject(i);
+                        videoLink = video.getString("mp4Video");
+                        DataSource.Factory datasourceFactory = new DefaultDataSourceFactory(getApplicationContext(),
+                                Util.getUserAgent(getApplicationContext(),"myapplication"));
+                        MediaSource mediaSource = new ExtractorMediaSource.Factory(datasourceFactory).createMediaSource(Uri.parse(videoLink));
+                        simpleExoPlayer.prepare(mediaSource);
+                        simpleExoPlayer.setPlayWhenReady(true);
+                    }
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                error.printStackTrace();
+            }
+        });
+        requestQueue.add(request);
     }
 
     private void iniExoplayer() {
@@ -64,7 +101,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         else {
-            new JsonTask().execute(apiUrl);
+            jsonParse();
         }
 
 
@@ -74,82 +111,5 @@ public class MainActivity extends AppCompatActivity {
 
         return cm.getActiveNetworkInfo() != null && cm.getActiveNetworkInfo().isConnected();
     }
-    private class JsonTask extends AsyncTask<String, String, String> {
 
-        protected void onPreExecute() {
-            super.onPreExecute();
-
-        }
-
-        protected String doInBackground(String... params) {
-
-
-            HttpURLConnection connection = null;
-            BufferedReader reader = null;
-
-            try {
-                URL url = new URL(params[0]);
-                connection = (HttpURLConnection) url.openConnection();
-                connection.connect();
-
-
-                InputStream stream = connection.getInputStream();
-
-                reader = new BufferedReader(new InputStreamReader(stream));
-
-                StringBuffer buffer = new StringBuffer();
-                String line = "";
-
-                while ((line = reader.readLine()) != null) {
-                    buffer.append(line+"\n");
-
-                }
-
-                return buffer.toString();
-
-
-            } catch (MalformedURLException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }  finally {
-                if (connection != null) {
-                    connection.disconnect();
-                }
-                try {
-                    if (reader != null) {
-                        reader.close();
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(String result) {
-            super.onPostExecute(result);
-            try {
-
-                jsonObject = new JSONObject(result);
-                System.out.println("Response Json : " + jsonObject);
-                int response_status = jsonObject.getInt("code");
-                if(response_status!=200)
-                    return;
-                JSONObject video = (JSONObject) jsonObject.getJSONArray("msg").get(0);
-                videoLink = video.getString("mp4Video");
-                DataSource.Factory datasourceFactory = new DefaultDataSourceFactory(getApplicationContext(),
-                        Util.getUserAgent(getApplicationContext(),"myapplication"));
-                MediaSource mediaSource = new ExtractorMediaSource.Factory(datasourceFactory).createMediaSource(Uri.parse(videoLink));
-                simpleExoPlayer.prepare(mediaSource);
-                simpleExoPlayer.setPlayWhenReady(true);
-
-            } catch (JSONException e) {
-                e.printStackTrace();
-                jsonObject = null;
-            }
-
-        }
-    }
 }
